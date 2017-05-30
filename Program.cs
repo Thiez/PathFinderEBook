@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Text;
 using System.Xml;
 
 using AngleSharp;
@@ -15,24 +17,37 @@ namespace SpellEbook
 
         public static void Main(string[] args)
         {
-            var interestingClasses = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cleric" /*, "Sorcerer", "Wizard", "Bard"*/ };
+            //var interestingClasses = new HashSet<string>() { "Cleric", "Sorcerer", "Wizard", "Bard", "Druid" };
+            var interestingClasses = new HashSet<string>() { "Cleric" };
             var lines = File.ReadAllLines(InputFile);
             var csvEntries = lines.Select(CsvEntry.Parse).ToList();
             var spells = csvEntries
                 .Skip(1)
                 .Select(Spell.FromCsvEntry)
-                .Where(s => s.GetSpellLevels().Any(kv => interestingClasses.Contains(kv.Key)))
+                .Where(s => s.GetSpellLevels().Any(kv => interestingClasses.Contains(kv.Key) && kv.Value == 3))
                 .OrderBy(s => s.Name)
-                .Take(10)
+                .Take(60)
                 .ToList();
 
             var dir = new DirectoryInfo("book");
-            dir.Delete(true);
-            dir.Create();
+            try
+            {
+                dir.Create();
+            }
+            catch
+            {
+                // ignored
+            }
+            
+            using (var archive = new ZipArchive(File.Open(Path.Combine(dir.FullName, "book.zip"), FileMode.Create), ZipArchiveMode.Create))
+            {
+                GenerateBoilerplate(archive, spells);
+            }
+            
+            
+            Directory.CreateDirectory(Path.Combine(dir.FullName, "OEBPS"));
             foreach (var spell in spells)
             {
-                //Console.WriteLine(spell);
-                //Console.WriteLine(ToXhtml(spell).OuterXml);
                 var xml = $"{XhtmlHeader}{ToXhtml(spell, interestingClasses).OuterXml}";
                 var fileNameChars = (spell.Name + ".xhtml").ToCharArray();
                 var badChars = Path.GetInvalidFileNameChars();
@@ -43,7 +58,8 @@ namespace SpellEbook
                         fileNameChars[i] = '_';
                     }
                 }
-                File.WriteAllText(Path.Combine(dir.FullName, new string(fileNameChars)), xml);
+
+                File.WriteAllText(Path.Combine(dir.FullName, "OEBPS", new string(fileNameChars)), xml);
             }
 
             var classToSpells = interestingClasses.ToDictionary(c => c, c => new List<Spell>(), StringComparer.OrdinalIgnoreCase);
@@ -100,11 +116,59 @@ namespace SpellEbook
                     }
                 }
 
-                using (var stream = new StreamWriter(File.Open(Path.Combine(dir.FullName, $"{kv.Key.ToLowerInvariant()}.xhtml"), FileMode.Create)))
+                using (var stream = new StreamWriter(File.Open(Path.Combine(dir.FullName, "OEBPS", $"{kv.Key}.xhtml"), FileMode.Create)))
                 {
                     stream.Write(XhtmlHeader);
                     doc.ToHtml(stream, new AngleSharp.XHtml.XhtmlMarkupFormatter());
                 }
+            }
+
+            
+        }
+
+        private static void GenerateBoilerplate(ZipArchive archive, List<Spell> spells)
+        {
+            GenerateMimeType(archive);
+            GenerateContainerXml(archive);
+            GenerateCss(archive);
+        }
+
+        private static void GenerateCss(ZipArchive archive) {
+            var entry = archive.CreateEntry("Styles/Style.css");
+            using (var output = entry.Open())
+            using (var input = File.OpenRead("content/Styles/Style.css"))
+            {
+                input.CopyTo(output);
+            }
+        }
+
+        private static void GenerateMimeType(ZipArchive archive)
+        {
+            const string content = "application/epub+zip";
+            var entry = archive.CreateEntry("mimetype", CompressionLevel.NoCompression);
+            using (var mimeType = new StreamWriter(entry.Open(), Encoding.UTF8))
+            {
+                mimeType.Write(content);
+            }
+        }
+
+        private static void GenerateContainerXml(ZipArchive archive) {
+            var container = new XmlDocument();
+            var ns = "urn:oasis:names:tc:opendocument:xmlns:container";
+            var root = container.CreateElement("container", ns);
+            container.AppendChild(root);
+            var rootFiles = container.CreateElement("rootfiles", ns);
+            root.AppendChild(rootFiles);
+            var rootFile = container.CreateElement("rootfile", ns);
+            rootFiles.AppendChild(rootFile);
+            rootFile.SetAttribute("full-path", "content.opf");
+            rootFile.SetAttribute("media-type", "application/oebps-package+xml");
+
+            var entry = archive.CreateEntry("META-INF/container.xml");
+            using (var sink = new StreamWriter(entry.Open(), Encoding.UTF8))
+            {
+                sink.Write(XhtmlHeader);
+                sink.Write(container.InnerXml);
             }
         }
 
@@ -189,7 +253,7 @@ namespace SpellEbook
                         level.AppendChild(doc.CreateTextNode(", "));
                     }
                     var span = doc.CreateElement("a");
-                    span.SetAttribute("href", $"{kv.Key.ToLowerInvariant()}.xhtml");
+                    span.SetAttribute("href", $"{kv.Key}.xhtml");
                     span.InnerText = kv.Key;
                     level.AppendChild(span);
                     level.AppendChild(doc.CreateTextNode(" " + kv.Value));
