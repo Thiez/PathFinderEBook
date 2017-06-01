@@ -1,0 +1,15 @@
+.spell-title {
+	font-weight: bold;
+}
+
+.spell-title:after {
+	content: ': ';
+}
+
+.subschool {
+	font-style: italic;
+}
+
+.descriptor {
+	font-style: italic;
+}
