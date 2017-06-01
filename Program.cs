@@ -17,7 +17,7 @@ namespace SpellEbook
 
         private static readonly ISet<char> BadChars = new HashSet<char>(Path.GetInvalidPathChars())
         {
-            ' ', ',', '\''
+            ' ', ',', '\'', '/'
         };
 
         public static void Main(string[] args)
@@ -163,7 +163,7 @@ namespace SpellEbook
             var classes = spells.SelectMany(s => s.GetSpellLevels().Select(kv => kv.Key)).Distinct().ToList();
             foreach (var spell in spells)
             {
-                var entry = archive.CreateEntry(CreateEntryName($"OEBPS/{spell.Name}.xhtml"));
+                var entry = archive.CreateEntry($"OEBPS/{CreateEntryName(spell.Name)}.xhtml");
                 using (var writer = new StreamWriter(entry.Open(), Encoding.UTF8))
                 {
                     writer.Write(XhtmlHeader);
@@ -230,7 +230,7 @@ namespace SpellEbook
 
                         var link = doc.CreateElement("a");
                         link.AppendChild(doc.CreateTextNode(entry.Name));
-                        link.SetAttribute("href", CreateEntryName($"{entry.Name}.xhtml"));
+                        link.SetAttribute("href", $"{CreateEntryName(entry.Name)}.xhtml");
 
                         var par = doc.CreateElement("p");
                         body.AppendChild(par);
@@ -247,7 +247,7 @@ namespace SpellEbook
                     }
                 }
 
-                var zipEntry = archive.CreateEntry(CreateEntryName($"OEBPS/{kv.Key}.xhtml"));
+                var zipEntry = archive.CreateEntry($"OEBPS/{CreateEntryName(kv.Key)}.xhtml");
                 using (var writer = new StreamWriter(zipEntry.Open(), Encoding.UTF8))
                 {
                     writer.Write(XhtmlHeader);
@@ -272,7 +272,7 @@ namespace SpellEbook
                 navLabel.AppendChild(navMap.OwnerDocument.CreateElement("text", ncxNS)).AppendChild(navMap.OwnerDocument.CreateTextNode(kv.Key));
                 var content = navMap.OwnerDocument.CreateElement("content", ncxNS);
                 navPoint.AppendChild(content);
-                content.SetAttribute("src", CreateEntryName($"{kv.Key}.xhtml"));
+                content.SetAttribute("src", $"{CreateEntryName(kv.Key)}.xhtml");
             }
 
             manifest.AppendChild(manifestFragment);
