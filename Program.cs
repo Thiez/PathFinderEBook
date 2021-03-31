@@ -323,7 +323,7 @@ namespace SpellEbook
         private static void GenerateCss(ZipArchive archive) {
             var entry = archive.CreateEntry("OEBPS/Styles/Style.css");
             using (var output = entry.Open())
-            using (var input = File.OpenRead("content/Styles/Style.css"))
+            using (var input = File.OpenRead("Styles/Style.css"))
             {
                 input.CopyTo(output);
             }
